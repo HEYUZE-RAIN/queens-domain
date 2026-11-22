@@ -2,6 +2,13 @@
 
 《女巫魔域》（Queen's Domain）的非官方中文全收集互动地图。纯静态单页，不联网、不读取游戏文件，所有进度只保存在你自己的浏览器里。
 
+在线访问：
+
+| 平台 | 地址 |
+|---|---|
+| Cloudflare Pages | https://queens-domain.pages.dev |
+| GitHub Pages | https://heyuze-rain.github.io/queens-domain/ |
+
 > **非官方**。本项目是玩家个人制作的非官方同人资料工具，与游戏开发商、发行方无任何隶属或授权关系。
 > 游戏内容版权归相应权利人所有。本项目**不提供游戏本体、破解或任何形式的下载**。
 
@@ -84,6 +91,11 @@ node check-region-icons.js
 ```
 
 检查项：锚点 / 地标 / 区域名标签是否都在各自轮廓内、所有区域是否在视野内、任意两块区域轮廓是否相交。
+
+## 部署
+
+推送 `main` 即自动部署（Cloudflare Pages + GitHub Pages 双托管，无需令牌）。
+详细配置见 **[DEPLOY.md](DEPLOY.md)**。
 
 ## 许可
 
