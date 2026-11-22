@@ -6,7 +6,7 @@
 
 | 平台 | 地址 |
 |---|---|
-| Cloudflare Pages | https://queens-domain.pages.dev |
+| Cloudflare Pages | https://queens-domain-eom.pages.dev |
 | GitHub Pages | https://heyuze-rain.github.io/queens-domain/ |
 
 > **非官方**。本项目是玩家个人制作的非官方同人资料工具，与游戏开发商、发行方无任何隶属或授权关系。

@@ -10,8 +10,11 @@
 
 | 平台 | 地址 | 说明 |
 |---|---|---|
-| **Cloudflare Pages** | https://queens-domain.pages.dev | 国内访问较快，无限带宽 |
+| **Cloudflare Pages** | https://queens-domain-eom.pages.dev | 国内访问较快，无限带宽 |
 | **GitHub Pages** | https://heyuze-rain.github.io/queens-domain/ | 备份 |
+
+> Cloudflare 的域名带 `-eom` 后缀，是因为 `queens-domain` 这个子域名已被其他 Cloudflare 用户占用，
+> 创建项目时系统自动追加了后缀。GitHub 仓库名仍是 `queens-domain`，两者不必一致。
 
 ---
 
