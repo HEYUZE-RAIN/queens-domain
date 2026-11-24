@@ -43,22 +43,16 @@ const { chromium } = require('playwright-core');
       (reg.marks || []).forEach(m => {
         if (!inPoly([m.x, m.y], poly)) problems.push({ lab: reg.lab, issue: '地标在轮廓外: ' + (m.label || m.t), at: [m.x, m.y] });
       });
-      // 标签：四角 + 中心都要在轮廓内（四角是真实视觉边界，戳出去会悬在水面上）
+      // 标签：直接调用页面里的 labelFitsPoly（全项目唯一判定实现），标准不会漂移
       const el = document.querySelector(`.rlab[data-rid="${reg.id}"] rect`);
       if (el) {
         const bb = el.getBBox();
-        const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-        const TOL = 1;   // 与 mapdraw.js 渲染时的内缩量保持一致
-        const pts = [
-          [cx, cy],
-          [bb.x + TOL, bb.y + TOL], [bb.x + bb.width - TOL, bb.y + TOL],
-          [bb.x + TOL, bb.y + bb.height - TOL], [bb.x + bb.width - TOL, bb.y + bb.height - TOL]
-        ];
-        const outside = pts.filter(c => !inPoly(c, poly)).length;
+        const rc = { x: bb.x, y: bb.y, w: bb.width, h: bb.height };
+        const fits = labelFitsPoly(rc, poly, LABEL_PAD_RENDER);
         const hasLeader = !!document.querySelector(`#mapLabs line[data-leader="${reg.id}"]`);
-        if (outside && !hasLeader) {
-          problems.push({ lab: reg.lab, issue: `区域名标签越界(${outside}点在外)且无引线` });
-        } else if (outside) {
+        if (!fits && !hasLeader) {
+          problems.push({ lab: reg.lab, issue: '区域名标签越界且无引线' });
+        } else if (!fits) {
           externalLabels.push(reg.lab);
         }
       }

@@ -41,6 +41,48 @@ function inPoly(pt, poly){
   return inside;
 }
 
+/* 内缩量：放置时留余量，渲染/校验用同一值 */
+const LABEL_PAD = 4;
+const LABEL_PAD_RENDER = 1;
+
+/* =========================================================
+   标签几何判定 —— 全项目唯一实现
+   ---------------------------------------------------------
+   放置算法、最终复核、渲染判定、校验脚本 四处都调用这里。
+   ⚠ 改判定标准只改这一个函数，不要在各处复制粘贴。
+
+   rect: { x, y, w, h }  （世界坐标，左上角 + 尺寸）
+   pad : 内缩量，把判定框往里收 pad 像素
+   ========================================================= */
+function labelFitsPoly(rect, poly, pad){
+  if(!poly) return true;
+  const P = pad == null ? LABEL_PAD : pad;
+  const L = rect.x + P, R = rect.x + rect.w - P;
+  const T = rect.y + P, B = rect.y + rect.h - P;
+  const cx = rect.x + rect.w / 2, M = (T + B) / 2;
+  // 四角 + 中心 + 四边中点。
+  // 四角是关键：岛屿底部常收窄，只查下边中点会让两个角戳到海面上。
+  const pts = [
+    [cx, M],
+    [L, M], [R, M],
+    [cx, T], [cx, B],
+    [L, T], [R, T],
+    [L, B], [R, B]
+  ];
+  return pts.every(c => inPoly(c, poly));
+}
+
+/* 标签框在渲染时的真实几何（放置与渲染共用，避免两处各算一套） */
+function labelRect(A, dx, dy, sc){
+  const s2 = sc == null ? 1 : sc;
+  const sz = A.sz * s2;
+  const wBox = Math.max(A.r.lab.length * sz + 14 * s2, (A.r.en || '').length * sz * 0.27 * 2) + 10 * s2;
+  const hBox = A.r.en ? sz + sz * 0.72 + 9 * s2 : sz + 9 * s2;
+  const x = A.r.anchor[0] + dx;
+  const top = A.r.anchor[1] + dy - sz - 2;
+  return { x: x - wBox / 2, y: top, w: wBox, h: hBox, sz: sz, cx: x };
+}
+
 function polyCenter(poly){
   return [
     poly.reduce((t, q) => t + q[0], 0) / poly.length,
@@ -510,34 +552,9 @@ function paintMap(){
   const polyCache = {};
   REGIONS.forEach(r => { polyCache[r.id] = polyOf(r); });
 
-  // 用与实际渲染完全相同的矩形几何
-  const realRect = (A, dx, dy, sc) => {
-    const sz = A.sz * sc;
-    const wBox = Math.max(A.r.lab.length * sz + 14 * sc, (A.r.en || '').length * sz * 0.27 * 2) + 10 * sc;
-    const hBox = A.r.en ? sz + sz * 0.72 + 9 * sc : sz + 9 * sc;
-    const x = A.r.anchor[0] + dx;
-    const top = A.r.anchor[1] + dy - sz - 2;
-    return { x: x - wBox / 2, y: top, w: wBox, h: hBox };
-  };
-  const fitsPoly = (A, dx, dy, w, h, sc) => {
-    const poly = polyCache[A.r.id];
-    if(!poly) return true;
-    const rc = realRect(A, dx, dy, sc);
-    const PAD = 4;   // 内缩余量，略大于渲染的 P=1，留安全边际
-    const cx = rc.x + rc.w / 2;
-    const T = rc.y + PAD, B = rc.y + rc.h - PAD;
-    const M = (T + B) / 2;
-    // 四角 + 中心 + 四边中点都要在岛内。
-    // 四角是关键：岛屿底部常收窄，只查下边中点会让两个角戳到海面上。
-    const pts = [
-      [cx, M],
-      [rc.x + PAD, M], [rc.x + rc.w - PAD, M],
-      [cx, T], [cx, B],
-      [rc.x + PAD, T], [rc.x + rc.w - PAD, T],
-      [rc.x + PAD, B], [rc.x + rc.w - PAD, B]
-    ];
-    return pts.every(c => inPoly(c, poly));
-  };
+  // 统一走全局 labelRect / labelFitsPoly，不再在此处另算一套几何
+  const fitsPoly = (A, dx, dy, w, h, sc) =>
+    labelFitsPoly(labelRect(A, dx, dy, sc), polyCache[A.r.id], LABEL_PAD);
 
   const placed = [];
   labBox.forEach(A => {
@@ -577,29 +594,8 @@ function paintMap(){
       }
       if(best && best.bad === 0) break;
     }
-    // 复核：最终位置必须真的放得下，否则视为外置
-    if(best && !fitsPoly(A, best.dx, best.dy, A.w * best.sc, A.h * best.sc, best.sc)){
-      best = null;
-    }
-    // 不管 best 是否存在，都做一次严格复核（含 8px 余量）
-    const strictOk = (b2) => {
-      if(!b2) return false;
-      const poly2 = polyCache[A.r.id];
-      if(!poly2) return true;
-      const rc = realRect(A, b2.dx, b2.dy, b2.sc);
-      const P = 4;
-      const cx2 = rc.x + rc.w / 2;
-      const T = rc.y + P, B = rc.y + rc.h - P, M = (T + B) / 2;
-      const L2 = rc.x + P, R2 = rc.x + rc.w - P;
-      // 与 fitsPoly 保持同一标准：四角 + 中心 + 四边中点
-      const pts = [
-        [cx2, M], [L2, M], [R2, M], [cx2, T], [cx2, B],
-        [L2, T], [R2, T], [L2, B], [R2, B]
-      ];
-      return pts.every(c => inPoly(c, poly2));
-    };
-
-    if(best && strictOk(best)){
+    // 最终复核：与放置、渲染、校验共用同一判定函数，标准不会漂移
+    if(best && fitsPoly(A, best.dx, best.dy, A.w * best.sc, A.h * best.sc, best.sc)){
       A.dx = best.dx; A.dy = best.dy; A.scale = best.sc; A.outside = false;
     } else {
       // 岛内放不下：标签贴到岛屿下缘外侧，用引线连回
@@ -620,31 +616,13 @@ function paintMap(){
   labBox.forEach(A0 => {
     const { r } = A0;
     const dy = A0.dy, ddx = A0.dx || 0, sc = A0.scale || 1;
-    const sz = A0.sz * sc;
-    const x = r.anchor[0] + ddx, y = r.anchor[1];
-    const wLab = r.lab.length * sz + 14 * sc;
-    const wEn = (r.en || '').length * sz * 0.27;
-    const wBox = Math.max(wLab, wEn * 2) + 10 * sc;
-    const hBox = r.en ? sz + sz * 0.72 + 9 * sc : sz + 9 * sc;
-    const rectY = y + dy - sz - 2;
+    // 几何统一由 labelRect 计算，与放置阶段完全一致
+    const rc = labelRect(A0, ddx, dy, sc);
+    const sz = rc.sz, x = rc.cx, y = r.anchor[1];
+    const wBox = rc.w, hBox = rc.h, rectY = rc.y;
 
-    // 实时判定：标签矩形是否完全在岛内，决定是否画引线
-    const polyOwn = polyOf(r);
-    let isOutside = false;
-    if(polyOwn){
-      const P = 1;   // 与校验脚本 check-region-icons.js 的 TOL 保持一致
-      const cx2 = x, cy2 = rectY + hBox / 2;
-      const L = x - wBox/2 + P, Rr = x + wBox/2 - P;
-      const Tp = rectY + P, Bt = rectY + hBox - P;
-      const pts = [
-        [cx2, cy2],
-        [L, cy2], [Rr, cy2],
-        [cx2, Tp], [cx2, Bt],
-        [L, Tp], [Rr, Tp],
-        [L, Bt], [Rr, Bt]
-      ];
-      isOutside = pts.some(c => !inPoly(c, polyOwn));
-    }
+    // 是否越界：走同一个判定函数（内缩量与校验脚本相同）
+    const isOutside = !labelFitsPoly(rc, polyOf(r), LABEL_PAD_RENDER);
 
     // 引线：从锚点连到标签顶部
     if(isOutside){
