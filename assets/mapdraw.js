@@ -523,15 +523,18 @@ function paintMap(){
     const poly = polyCache[A.r.id];
     if(!poly) return true;
     const rc = realRect(A, dx, dy, sc);
-    const PAD = 6;   // 判定时多留余量，保证渲染后不压线
-    const cx = rc.x + rc.w / 2, cy = rc.y + rc.h / 2;
+    const PAD = 4;   // 内缩余量，略大于渲染的 P=1，留安全边际
+    const cx = rc.x + rc.w / 2;
     const T = rc.y + PAD, B = rc.y + rc.h - PAD;
     const M = (T + B) / 2;
-    // 要求：中心 + 四边中点都在岛内（角上允许贴着海岸线，因为岛屿轮廓是圆润的）
+    // 四角 + 中心 + 四边中点都要在岛内。
+    // 四角是关键：岛屿底部常收窄，只查下边中点会让两个角戳到海面上。
     const pts = [
       [cx, M],
       [rc.x + PAD, M], [rc.x + rc.w - PAD, M],
-      [cx, T], [cx, B]
+      [cx, T], [cx, B],
+      [rc.x + PAD, T], [rc.x + rc.w - PAD, T],
+      [rc.x + PAD, B], [rc.x + rc.w - PAD, B]
     ];
     return pts.every(c => inPoly(c, poly));
   };
@@ -584,10 +587,15 @@ function paintMap(){
       const poly2 = polyCache[A.r.id];
       if(!poly2) return true;
       const rc = realRect(A, b2.dx, b2.dy, b2.sc);
-      const P = 8;
+      const P = 4;
       const cx2 = rc.x + rc.w / 2;
       const T = rc.y + P, B = rc.y + rc.h - P, M = (T + B) / 2;
-      const pts = [[cx2, M], [rc.x + P, M], [rc.x + rc.w - P, M], [cx2, T], [cx2, B]];
+      const L2 = rc.x + P, R2 = rc.x + rc.w - P;
+      // 与 fitsPoly 保持同一标准：四角 + 中心 + 四边中点
+      const pts = [
+        [cx2, M], [L2, M], [R2, M], [cx2, T], [cx2, B],
+        [L2, T], [R2, T], [L2, B], [R2, B]
+      ];
       return pts.every(c => inPoly(c, poly2));
     };
 
@@ -624,12 +632,16 @@ function paintMap(){
     const polyOwn = polyOf(r);
     let isOutside = false;
     if(polyOwn){
-      const P = 1;
+      const P = 1;   // 与校验脚本 check-region-icons.js 的 TOL 保持一致
       const cx2 = x, cy2 = rectY + hBox / 2;
+      const L = x - wBox/2 + P, Rr = x + wBox/2 - P;
+      const Tp = rectY + P, Bt = rectY + hBox - P;
       const pts = [
         [cx2, cy2],
-        [x - wBox/2 + P, cy2], [x + wBox/2 - P, cy2],
-        [cx2, rectY + P], [cx2, rectY + hBox - P]
+        [L, cy2], [Rr, cy2],
+        [cx2, Tp], [cx2, Bt],
+        [L, Tp], [Rr, Tp],
+        [L, Bt], [Rr, Bt]
       ];
       isOutside = pts.some(c => !inPoly(c, polyOwn));
     }
@@ -642,7 +654,7 @@ function paintMap(){
     }
 
     o += `<g class="rlab" data-rid="${r.id}" style="cursor:pointer">
-      <rect x="${(x - wBox/2).toFixed(1)}" y="${rectY.toFixed(1)}" width="${wBox.toFixed(1)}" height="${hBox.toFixed(1)}" rx="6"
+      <rect x="${(x - wBox/2).toFixed(1)}" y="${rectY.toFixed(1)}" width="${wBox.toFixed(1)}" height="${hBox.toFixed(1)}" rx="9"
         fill="#070f15" fill-opacity="${isOutside ? '.9' : '.5'}"
         stroke="${isOutside ? 'rgba(143,208,232,.55)' : 'rgba(143,208,232,.18)'}" stroke-width="1"/>
       <text x="${x}" y="${(y + dy).toFixed(1)}" text-anchor="middle"

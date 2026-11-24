@@ -43,12 +43,17 @@ const { chromium } = require('playwright-core');
       (reg.marks || []).forEach(m => {
         if (!inPoly([m.x, m.y], poly)) problems.push({ lab: reg.lab, issue: '地标在轮廓外: ' + (m.label || m.t), at: [m.x, m.y] });
       });
-      // 标签：中心 + 四边中点都要在轮廓内；外置标签（带引线）单独统计
+      // 标签：四角 + 中心都要在轮廓内（四角是真实视觉边界，戳出去会悬在水面上）
       const el = document.querySelector(`.rlab[data-rid="${reg.id}"] rect`);
       if (el) {
         const bb = el.getBBox();
         const cx = bb.x + bb.width / 2, cy = bb.y + bb.height / 2;
-        const pts = [[cx, cy], [bb.x, cy], [bb.x + bb.width, cy], [cx, bb.y], [cx, bb.y + bb.height]];
+        const TOL = 1;   // 与 mapdraw.js 渲染时的内缩量保持一致
+        const pts = [
+          [cx, cy],
+          [bb.x + TOL, bb.y + TOL], [bb.x + bb.width - TOL, bb.y + TOL],
+          [bb.x + TOL, bb.y + bb.height - TOL], [bb.x + bb.width - TOL, bb.y + bb.height - TOL]
+        ];
         const outside = pts.filter(c => !inPoly(c, poly)).length;
         const hasLeader = !!document.querySelector(`#mapLabs line[data-leader="${reg.id}"]`);
         if (outside && !hasLeader) {
